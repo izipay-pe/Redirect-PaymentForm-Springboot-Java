@@ -52,9 +52,10 @@ Reemplace **[CHANGE_ME]** con sus credenciales de `API` extraídas desde el Back
 # Archivo para la configuración de las crendeciales de comercio
 #
 # Identificador de su tienda
-merchantCode=CHANGE_ME_USER_ID
+SHOP_ID=CHANGE_ME_USER_ID
+
 # Clave de Test o Producción
-key=CHANGE_ME_PASSWORD
+KEY=CHANGE_ME_KEY
 ```
 
 ### Ejecutar proyecto
@@ -79,7 +80,7 @@ http://127.0.0.1:8081
 
 ## 💻4.1. Desplegar pasarela
 ### Autentificación
-Extraer las claves de `identificador de tienda` y `clave de test o producción` del Backoffice Vendedor y agregarlo en los parámetros `vads_site_id` y en método `calcularSignature(Map<String, String> parameters)`. Este último permite calcular la firma transmitida de los datos de pago. Podrás encontrarlo en el archivo `src/main/java/com/example/redirectpaymentform/controller/McwController.java`.
+Extraer las claves de `identificador de tienda` y `clave de test o producción` del Backoffice Vendedor y agregarlo en los parámetros `vads_site_id` y en método `calculateSignature(Map<String, String> parameters)`. Este último permite calcular la firma transmitida de los datos de pago. Podrás encontrarlo en el archivo `src/main/java/com/example/redirectpaymentform/controller/McwController.java`.
 ```java
 public Map<String, String> dataForm(Map<String, String> parameters) {
 
@@ -90,23 +91,23 @@ public Map<String, String> dataForm(Map<String, String> parameters) {
   newParams.put("vads_action_mode", "INTERACTIVE");
   ...
   ...
-  newParams.put("vads_site_id", merchantCode); // ID de tienda
+  newParams.put("vads_site_id", SHOP_ID); // ID de tienda
   	
-	// Calcula el signature con los datos del Map
-	String signature = calcularSignature(newParams);
+  // Calcula el signature con los datos del Map
+  String signature = calculateSignature(newParams);
 
-	// Agrega el signature calulado al Map
-	newParams.put("signature", signature);
+  // Agrega el signature calulado al Map
+  newParams.put("signature", signature);
 
-	// Retorna el Map
-	return newParams;
+  // Retorna el Map
+  return newParams;
   }
 
-public String calcularSignature(Map<String, String> parameters) {
+public String calculateSignature(Map<String, String> parameters) {
 	Map<String, String> sortedParams = new TreeMap<>(parameters);	
 	
 	// Obtener la clave de test o producción
-	String key =  properties.getProperty("key");
+	String key =  properties.getProperty("KEY");
 	...
   	...
 	contentSignature.append(key);
@@ -137,61 +138,72 @@ Para desplegar la pasarela, crea un formulario **HTML** de tipo **POST** con el 
 ## 💳4.2. Analizar resultado del pago
 
 ### Validación de firma
-Se configura el método `calcularSignature(Map<String, String> parameters)` que generará la firma de los datos de la respuesta de pago. Podrás encontrarlo en el archivo `src/main/java/com/example/redirectpaymentform/controller/McwController.java`.
+Se configura el método `calculateSignature()` que generará la firma de los datos de la respuesta de pago y el método `checkSignature()` que se encargara de validar la firma. Podrás encontrarlo en el archivo `src/main/java/com/example/redirectpaymentform/controller/McwController.java`.
 
 ```java
-// Método para calcular el signature
-public String calcularSignature(Map<String, String> parameters) {
-	Map<String, String> sortedParams = new TreeMap<>(parameters);
+public String calculateSignature(Map<String, String> parameters) {
+	Map<String, String> sortedParams = new TreeMap<>(parameters);	
 	
-	// Obtener la clave de test o producción
-	String key =  properties.getProperty("key");
-	// Crear un StringBuilder para construir el contenido de la firma.
+	// Obtener la Key
+	String key =  properties.getProperty("KEY");
+	// Crear un StringBuilder para construir el contenido de la firma
 	StringBuilder contentSignature = new StringBuilder();
 	
 	// Ordena los parametros e intera sobre los mismos
-  for (Map.Entry<String, String> entry : sortedParams.entrySet()) {
-
-    String paramKey = entry.getKey();
-    String value = entry.getValue();
-
-    // Verificar si el nombre del parámetro comienza con 'vads_'
-    if (paramKey.startsWith("vads_")) {
-      // Agregar el valor del parámetro seguido de un "+" al contenido
-      contentSignature.append(value).append("+");
-    }
-  }
-
-  	// Agregar la key al final del contenido
+    	for (Map.Entry<String, String> entry : sortedParams.entrySet()) {
+        	...
+		...
+    	}
+	
+	// Agregar la key al final del contenido
 	contentSignature.append(key);
 	
-	// Generar y retornar la firma 
+	// Generar y retornar la firma
 	return HmacSha256(contentSignature.toString(), key);
+    }
 
-} 
+public boolean checkSignature(Map<String, String> parameters){
+    	// Obtener el signature de la respuesta
+    	String signature = parameters.get("signature");
+	
+	return signature.equals(calculateSignature(parameters));
+	
+    }
 ```
 
 Se valida que la firma recibida es correcta en el archivo `src/main/java/com/example/redirectpaymentform/controller/McwSpringboot.java`.
 
 ```java
 @PostMapping("/result")
-  public String processResult(
-  // Procesando datos POST enviados de la respuesta de Izipay
+        public String processResult(
 	@RequestParam Map<String, String> resultParameters,
-    Model model
-  ) {
-	// Almacenar el signature de la respuesta
-	String resultPostSignature = resultParameters.get("signature");
-	// Calcular el valor del signature
-	String resultSignature = mcwController.calcularSignature(resultParameters);
+        Model model
+    	) {
+	...
+	...
+	// Válida que la respuesta sea íntegra comprando el hash recibido en el 'kr-hash' con el generado con el 'kr-answer'
+	if (!mcwController.checkHash(krHash, HMAC_SHA256, krAnswer)){
+		return "error";
+	}
+	...
+	...
+	// Renderiza el template
+        return "result";        
+    }
 
-  ...
-  ...
-	
-	// Procesa la condicional si el signature calculado con el que recibimos son iguales
-	if (resultSignature.equals(resultPostSignature)) {
-	  ...
-    ...
+    @PostMapping("/ipn")
+    @ResponseBody
+	public String processIpn(
+		@RequestParam Map<String, String> ipnParameters
+    	) {
+	...
+        ...
+	// Válida que la respuesta sea íntegra comprando el hash recibido en el 'kr-hash' con el generado con el 'kr-answer'
+	if (!mcwController.checkHash(krHash, PASSWORD, krAnswer)){
+		return "No valid IPN";
+	}
+	...
+	...
     }
 ```
 En caso que la validación sea exitosa, se renderiza el template con los valores. Como se muestra en el archivo `src/main/resources/templates/result.html`.
@@ -206,31 +218,27 @@ En caso que la validación sea exitosa, se renderiza el template con los valores
 ### IPN
 La IPN es una notificación de servidor a servidor (servidor de Izipay hacia el servidor del comercio) que facilita información en tiempo real y de manera automática cuando se produce un evento, por ejemplo, al registrar una transacción.
 
-Se realiza la verificación de la firma y se imprime en el log el estado del pago. Podrás encontrarlo en el archivo `src/main/java/com/example/redirectpaymentform/controller/McwSpringboot.java`.
+Se realiza la verificación de la firma y se retorna la respuesta del estado del pago. Podrás encontrarlo en el archivo `src/main/java/com/example/redirectpaymentform/controller/McwSpringboot.java`.
 
 ```java
 @PostMapping("/ipn")
-  @ResponseBody
+    @ResponseBody
 	public String processIpn(
-    @RequestParam Map<String, String> ipnParameters
-  ) {
-	
-	// Almacenar el signature de la respuesta IPN
-	String ipnPostSignature = ipnParameters.get("signature");
-	// Calcular el valor del signature
-	String ipnSignature = mcwController.calcularSignature(ipnParameters);
-	
+		@RequestParam Map<String, String> ipnParameters
+    	) {
 	...
-  ...
-	
-	// Procesa la condicional si el signature calculado con el que recibimos en la IPN son iguales
-	if (ipnSignature.equals(ipnPostSignature)) {
-		// Imprimiendo en el log el Order Status
-		return "OK! Order Status: " + orderStatus;
-	  ...
-    ...
+        ...
+	// Válida que la respuesta sea íntegra comprando el hash recibido en el 'kr-hash' con el generado con el 'kr-answer'
+	if (!mcwController.checkHash(krHash, PASSWORD, krAnswer)){
+		return "No valid IPN";
+	}
 
-}
+	// Verifica el orderStatus PAID
+        String orderStatus = jsonResponse.getString("orderStatus");
+        
+	// Retornando el Order Status
+        return "OK! Order Status: " + orderStatus;
+    }
 ```
 
 La IPN debe ir configurada en el Backoffice Vendedor, en `Configuración -> Reglas de notificación -> URL de notificación al final del pago`
@@ -262,9 +270,10 @@ Reemplace **[CHANGE_ME]** con sus credenciales de PRODUCCIÓN extraídas desde e
 # Archivo para la configuración de las crendeciales de comercio
 #
 # Identificador de su tienda
-merchantCode=CHANGE_ME_USER_ID
+SHOP_ID=CHANGE_ME_USER_ID
+
 # Clave de Test o Producción
-key=CHANGE_ME_PASSWORD
+KEY=CHANGE_ME_KEY
 ```
 
 ## 🎨 5. Personalización
