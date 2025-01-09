@@ -24,7 +24,7 @@ public class McwSpringboot {
      */
     @GetMapping("/")
     public String showIndexPage(Model model) {
-	String orderId = mcwController.generarOrderId();
+	String orderId = mcwController.generateOrderId();
 	model.addAttribute("orderId", orderId);
         return "index";
     }
@@ -68,11 +68,12 @@ public class McwSpringboot {
 	@RequestParam Map<String, String> resultParameters,
         Model model
     ) {
-	// Almacenar el signature de la respuesta
-	String resultPostSignature = resultParameters.get("signature");
-	// Calcular el valor del signature
-	String resultSignature = mcwController.calcularSignature(resultParameters);
-        
+	
+	// Válida que la respuesta sea íntegra comprando el signature recibido con el generado
+	if (!mcwController.checkSignature(resultParameters)){
+		return "error";
+	}
+
 	currency = resultParameters.get("vads_currency");
 
 	if("604".equals(currency)) {
@@ -81,22 +82,17 @@ public class McwSpringboot {
 		currencyType = "USD";
 	}
 	
-	// Procesa la condicional si el signature calculado con el que recibimos son iguales
-	if (resultSignature.equals(resultPostSignature)) {
-		// Almacena algunos datos de la respuesta en variables
-		String orderTotalAmount = resultParameters.get("vads_amount");
-		double orderAmountdouble = Double.parseDouble(orderTotalAmount) / 100;
-    		String orderAmount = String.format("%.02f", orderAmountdouble);
+	// Almacena algunos datos de la respuesta en variables
+	String orderTotalAmount = resultParameters.get("vads_amount");
+	double orderAmountdouble = Double.parseDouble(orderTotalAmount) / 100;
+    	String orderAmount = String.format("%.02f", orderAmountdouble);
 		
-		// Agrega los datos al modelo
-		model.addAttribute("amount", orderAmount);
-		model.addAttribute("parameters", resultParameters);
-		model.addAttribute("currency", currencyType);
+	// Agrega los datos al modelo
+	model.addAttribute("amount", orderAmount);
+	model.addAttribute("parameters", resultParameters);
+	model.addAttribute("currency", currencyType);
 		
-		return "result";
-	} else {
-        	return "index";
-    	}
+	return "result";
 	
     }
     
@@ -109,23 +105,18 @@ public class McwSpringboot {
 		@RequestParam Map<String, String> ipnParameters
     	) {
 	
-	// Almacenar el signature de la respuesta IPN
-	String ipnPostSignature = ipnParameters.get("signature");
-	// Calcular el valor del signature
-	String ipnSignature = mcwController.calcularSignature(ipnParameters);
-	
+	// Válida que la respuesta sea íntegra comprando el signture recibido con el generado
+	if (!mcwController.checkSignature(ipnParameters)){
+		return "No valid IPN";
+	}
+
 	// Almacena algunos datos de la respuesta IPN en variables
 	String orderStatus = ipnParameters.get("vads_trans_status");
 	String orderId = ipnParameters.get("vads_order_id");
 	String uuid = ipnParameters.get("vads_trans_uuid");
 	
-	// Procesa la condicional si el signature calculado con el que recibimos en la IPN son iguales
-	if (ipnSignature.equals(ipnPostSignature)) {
-		// Imprimiendo en el log el Order Status
-		return "OK! Order Status: " + orderStatus;
-	} else {
-		return "No valid IPN";
-	}
+	// Enviando en la respuesta el Order Status
+	return "OK! Order Status: " + orderStatus;
 
 
     }
