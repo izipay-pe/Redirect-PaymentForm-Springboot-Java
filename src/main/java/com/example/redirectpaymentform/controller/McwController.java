@@ -30,7 +30,7 @@ public class McwController {
     private McwProperties properties = new McwProperties();
 
     // Método para generar un orderNumer basado en la hora
-    public String generarOrderId() {
+    public String generateOrderId() {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("'Order-'yyyyMMddHHmmss");
         return LocalDateTime.now().format(formatter);
     }
@@ -40,7 +40,7 @@ public class McwController {
         
 
 	// Obteniendo claves API
-	String merchantCode = properties.getProperty("merchantCode");
+	String SHOP_ID = properties.getProperty("SHOP_ID");
 
 	
 	// Convirtiendo el valor del amount
@@ -59,7 +59,7 @@ public class McwController {
     	newParams.put("vads_payment_config", "SINGLE");
     	newParams.put("vads_url_success", "http://127.0.0.1:8081/result");
     	newParams.put("vads_return_mode", "POST");
-    	newParams.put("vads_site_id", merchantCode); // ID de tienda
+    	newParams.put("vads_site_id", SHOP_ID); // ID de tienda
 							//
     	newParams.put("vads_cust_first_name", parameters.get("firstName"));
     	newParams.put("vads_cust_last_name", parameters.get("lastName"));
@@ -91,7 +91,7 @@ public class McwController {
     	newParams.put("vads_redirect_success_timeout", "5");  // Tiempo de redirección
 	
 	// Calcula el signature con los datos del Map
-	String signature = calcularSignature(newParams);
+	String signature = calculateSignature(newParams);
 
 	// Agrega el signature calulado al Map
 	newParams.put("signature", signature);
@@ -101,11 +101,11 @@ public class McwController {
     }
     
     // Método para calcular el signature
-    public String calcularSignature(Map<String, String> parameters) {
+    public String calculateSignature(Map<String, String> parameters) {
 	Map<String, String> sortedParams = new TreeMap<>(parameters);	
 	
 	// Obtener la Key
-	String key =  properties.getProperty("key");
+	String key =  properties.getProperty("KEY");
 	// Crear un StringBuilder para construir el contenido de la firma
 	StringBuilder contentSignature = new StringBuilder();
 	
@@ -141,5 +141,12 @@ public class McwController {
     	}
     }
 
-}
+    public boolean checkSignature(Map<String, String> parameters){
+    	// Obtener el signature de la respuesta
+    	String signature = parameters.get("signature");
+	
+	return signature.equals(calculateSignature(parameters));
+	
+    }
 
+}
