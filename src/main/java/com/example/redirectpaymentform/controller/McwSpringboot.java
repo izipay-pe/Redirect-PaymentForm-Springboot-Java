@@ -69,7 +69,7 @@ public class McwSpringboot {
         Model model
     ) {
 	
-	// Válida que la respuesta sea íntegra comprando el signature recibido con el generado
+	// Válida que la respuesta sea íntegra comparando el signature recibido con el generado
 	if (!mcwController.checkSignature(resultParameters)){
 		return "error";
 	}
